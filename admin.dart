@@ -7,14 +7,14 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math' as math;
 
-// API Configuration (same as main.dart)
+// API Configuration
 class ApiConfig {
   static const String baseUrl = 'https://api.laundry-system.com/v1'; // Change to your API URL
   static const Map<String, String> headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
-  
+
   static Map<String, String> authHeaders(String token) {
     return {
       ...headers,
@@ -23,6 +23,7 @@ class ApiConfig {
   }
 }
 
+// Main Admin Dashboard Widget
 class AdminDashboard extends StatefulWidget {
   final String userId;
   final String userEmail;
@@ -81,11 +82,12 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
 
       // Firebase: Sign out
       await FirebaseAuth.instance.signOut();
-      
+
       if (!mounted) return;
-      
+
       Navigator.pushReplacementNamed(context, '/');
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('ไม่สามารถออกจากระบบได้: $e')),
       );
@@ -207,7 +209,7 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
                 ],
               ),
             ),
-            
+
             // Body Content
             Expanded(
               child: FadeTransition(
@@ -215,7 +217,7 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
                 child: _buildBody(),
               ),
             ),
-            
+
             // Bottom Navigation
             Container(
               decoration: BoxDecoration(
@@ -301,9 +303,9 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
 
       if (response.statusCode == 200) {
         final notifications = jsonDecode(response.body)['notifications'] as List;
-        
+
         if (!mounted) return;
-        
+
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -441,7 +443,7 @@ class _NotificationsSheet extends StatelessWidget {
   }
 }
 
-// Dashboard Screen
+// Dashboard Screen (Tab 1)
 class _DashboardScreen extends StatefulWidget {
   final String adminId;
   final String apiToken;
@@ -465,7 +467,6 @@ class _DashboardScreenState extends State<_DashboardScreen> {
     _loadDashboardData();
   }
 
-  // API: Get dashboard data
   Future<void> _loadDashboardData() async {
     try {
       final response = await http.get(
@@ -473,7 +474,7 @@ class _DashboardScreenState extends State<_DashboardScreen> {
         headers: ApiConfig.authHeaders(widget.apiToken),
       );
 
-      if (response.statusCode == 200) {
+      if (mounted && response.statusCode == 200) {
         setState(() {
           _dashboardData = jsonDecode(response.body);
           _isLoading = false;
@@ -481,7 +482,9 @@ class _DashboardScreenState extends State<_DashboardScreen> {
       }
     } catch (e) {
       print('Error loading dashboard: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -495,91 +498,252 @@ class _DashboardScreenState extends State<_DashboardScreen> {
     final vendorCount = _dashboardData['vendorCount'] ?? 0;
     final activeVendors = _dashboardData['activeVendors'] ?? 0;
     final machineCount = _dashboardData['machineCount'] ?? 0;
-    final commission = todayRevenue * 0.15;
-    final chartData = (_dashboardData['revenueChart'] as List?)?.map((e) => e.toDouble()).toList() ?? [];
+    final commission = todayRevenue * 0.15; // Example, should come from API
+    final chartData = (_dashboardData['revenueChart'] as List?)
+            ?.map((e) => e.toDouble())
+            .toList() ??
+        [];
     final activities = _dashboardData['recentActivities'] as List? ?? [];
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Welcome Message
-          const Text(
-            'สวัสดี, Admin',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D3748),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'ภาพรวมระบบวันที่ ${DateFormat('dd MMMM yyyy', 'th').format(DateTime.now())}',
-            style: const TextStyle(
-              fontSize: 16,
-              color: Color(0xFF718096),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Summary Cards
-          Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _DashboardCard(
-                      title: 'รายได้วันนี้',
-                      value: '฿${NumberFormat('#,###').format(todayRevenue)}',
-                      icon: Icons.attach_money,
-                      color: Colors.green,
-                      trend: '+12.5%',
-                      trendUp: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DashboardCard(
-                      title: 'เจ้าของร้าน',
-                      value: '$vendorCount',
-                      subtitle: '$activeVendors active',
-                      icon: Icons.store,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ],
+    return RefreshIndicator(
+      onRefresh: _loadDashboardData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'สวัสดี, Admin',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DashboardCard(
-                      title: 'จำนวนเครื่อง',
-                      value: '$machineCount',
-                      icon: Icons.devices,
-                      color: Colors.purple,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DashboardCard(
-                      title: 'ค่าคอมมิชชั่น',
-                      value: '฿${NumberFormat('#,###').format(commission)}',
-                      icon: Icons.account_balance,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ภาพรวมระบบวันที่ ${DateFormat('dd MMMM yyyy', 'th').format(DateTime.now())}',
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF718096),
               ),
-            ],
-          ),
-          const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 24),
 
-          // Revenue Chart
-          if (chartData.isNotEmpty)
+            // Summary Cards
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DashboardCard(
+                        title: 'รายได้วันนี้',
+                        value: '฿${NumberFormat('#,###').format(todayRevenue)}',
+                        icon: Icons.attach_money,
+                        color: Colors.green,
+                        trend: '+12.5%', // Mock data
+                        trendUp: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _DashboardCard(
+                        title: 'เจ้าของร้าน',
+                        value: '$vendorCount',
+                        subtitle: '$activeVendors active',
+                        icon: Icons.store,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DashboardCard(
+                        title: 'จำนวนเครื่อง',
+                        value: '$machineCount',
+                        icon: Icons.devices,
+                        color: Colors.purple,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _DashboardCard(
+                        title: 'ค่าคอมมิชชั่น',
+                        value: '฿${NumberFormat('#,###.00').format(commission)}',
+                        icon: Icons.account_balance,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Revenue Chart
+            if (chartData.isNotEmpty)
+              Container(
+                height: 300,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'แนวโน้มรายได้ 7 วันล่าสุด',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.trending_up,
+                                color: Colors.green,
+                                size: 16,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                '+23.5%', // Mock data
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: LineChart(
+                        LineChartData(
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            horizontalInterval:
+                                chartData.reduce(math.max) > 0 ? chartData.reduce(math.max) / 4 : 1000,
+                            getDrawingHorizontalLine: (value) {
+                              return FlLine(
+                                color: Colors.grey[200]!,
+                                strokeWidth: 1,
+                              );
+                            },
+                          ),
+                          titlesData: FlTitlesData(
+                            show: true,
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 30,
+                                interval: 1,
+                                getTitlesWidget: (value, meta) {
+                                  final day = DateTime.now()
+                                      .subtract(Duration(days: 6 - value.toInt()));
+                                  return Text(
+                                    DateFormat('E', 'th').format(day),
+                                    style: const TextStyle(fontSize: 12),
+                                  );
+                                },
+                              ),
+                            ),
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                interval:
+                                    chartData.reduce(math.max) > 0 ? chartData.reduce(math.max) / 4 : 1000,
+                                reservedSize: 50,
+                                getTitlesWidget: (value, meta) {
+                                  return Text(
+                                    '${(value / 1000).toStringAsFixed(0)}k',
+                                    style: const TextStyle(fontSize: 10),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          minX: 0,
+                          maxX: 6,
+                          minY: 0,
+                          maxY: chartData.isEmpty
+                              ? 50000
+                              : chartData.reduce(math.max) * 1.2,
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: _getSpots(chartData),
+                              isCurved: true,
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF4B7BF5), Color(0xFF3A5FCD)],
+                              ),
+                              barWidth: 3,
+                              isStrokeCapRound: true,
+                              dotData: FlDotData(
+                                show: true,
+                                getDotPainter:
+                                    (spot, percent, barData, index) {
+                                  return FlDotCirclePainter(
+                                    radius: 4,
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                    strokeColor: const Color(0xFF4B7BF5),
+                                  );
+                                },
+                              ),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF4B7BF5).withOpacity(0.3),
+                                    const Color(0xFF3A5FCD).withOpacity(0.0),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 24),
+
+            // Recent Activities
             Container(
-              height: 300,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -594,192 +758,49 @@ class _DashboardScreenState extends State<_DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'แนวโน้มรายได้ 7 วันล่าสุด',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(
-                              Icons.trending_up,
-                              color: Colors.green,
-                              size: 16,
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              '+23.5%',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: 10000,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: Colors.grey[200]!,
-                              strokeWidth: 1,
-                            );
-                          },
-                        ),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          rightTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          topTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 30,
-                              interval: 1,
-                              getTitlesWidget: (value, meta) {
-                                final labels = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
-                                if (value.toInt() >= 0 && value.toInt() < labels.length) {
-                                  return Text(
-                                    labels[value.toInt()],
-                                    style: const TextStyle(fontSize: 12),
-                                  );
-                                }
-                                return const Text('');
-                              },
-                            ),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              interval: 10000,
-                              reservedSize: 50,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  '${(value / 1000).toStringAsFixed(0)}k',
-                                  style: const TextStyle(fontSize: 10),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        borderData: FlBorderData(show: false),
-                        minX: 0,
-                        maxX: 6,
-                        minY: 0,
-                        maxY: chartData.isEmpty ? 50000 : chartData.reduce(math.max) * 1.2,
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: _getSpots(chartData),
-                            isCurved: true,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF4B7BF5), Color(0xFF3A5FCD)],
-                            ),
-                            barWidth: 3,
-                            isStrokeCapRound: true,
-                            dotData: FlDotData(
-                              show: true,
-                              getDotPainter: (spot, percent, barData, index) {
-                                return FlDotCirclePainter(
-                                  radius: 4,
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                  strokeColor: const Color(0xFF4B7BF5),
-                                );
-                              },
-                            ),
-                            belowBarData: BarAreaData(
-                              show: true,
-                              gradient: LinearGradient(
-                                colors: [
-                                  const Color(0xFF4B7BF5).withOpacity(0.3),
-                                  const Color(0xFF3A5FCD).withOpacity(0.0),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                  const Text(
+                    'กิจกรรมล่าสุด',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  if (activities.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text('ไม่มีกิจกรรม'),
+                      ),
+                    )
+                  else
+                    ...activities.take(5).map((activity) {
+                      return _ActivityItem(
+                        icon: _getActivityIcon(activity['type']),
+                        title: activity['title'] ?? '',
+                        subtitle: activity['description'] ?? '',
+                        time: _formatTimestamp(activity['timestamp']),
+                        color: _getActivityColor(activity['type']),
+                      );
+                    }).toList(),
                 ],
               ),
             ),
-          const SizedBox(height: 24),
-
-          // Recent Activities
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'กิจกรรมล่าสุด',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (activities.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text('ไม่มีกิจกรรม'),
-                    ),
-                  )
-                else
-                  ...activities.take(5).map((activity) {
-                    return _ActivityItem(
-                      icon: _getActivityIcon(activity['type']),
-                      title: activity['title'] ?? '',
-                      subtitle: activity['description'] ?? '',
-                      time: _formatTimestamp(activity['timestamp']),
-                      color: _getActivityColor(activity['type']),
-                    );
-                  }).toList(),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   List<FlSpot> _getSpots(List<double> data) {
+    if (data.length != 7) {
+      // Pad with zeros if data is not for 7 days
+      final paddedData = List<double>.from(data);
+      while (paddedData.length < 7) {
+        paddedData.insert(0, 0);
+      }
+      data = paddedData.sublist(paddedData.length - 7);
+    }
     final spots = <FlSpot>[];
     for (int i = 0; i < data.length; i++) {
       spots.add(FlSpot(i.toDouble(), data[i]));
@@ -839,7 +860,7 @@ class _DashboardScreenState extends State<_DashboardScreen> {
   }
 }
 
-// Vendor Management Screen
+// Vendor Management Screen (Tab 2)
 class _VendorManagementScreen extends StatefulWidget {
   final String adminId;
   final String apiToken;
@@ -850,7 +871,8 @@ class _VendorManagementScreen extends StatefulWidget {
   });
 
   @override
-  State<_VendorManagementScreen> createState() => _VendorManagementScreenState();
+  State<_VendorManagementScreen> createState() =>
+      _VendorManagementScreenState();
 }
 
 class _VendorManagementScreenState extends State<_VendorManagementScreen> {
@@ -866,54 +888,60 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
     _loadVendors();
   }
 
-  // API: Get vendors and pending applications
   Future<void> _loadVendors() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      // Get vendors
       final vendorsResponse = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/admin/vendors'),
         headers: ApiConfig.authHeaders(widget.apiToken),
       );
 
-      // Get pending applications from Firestore
       final applicationsSnapshot = await FirebaseFirestore.instance
           .collection('vendor_applications')
           .where('status', isEqualTo: 'pending')
           .get();
 
+      if (!mounted) return;
+
       if (vendorsResponse.statusCode == 200) {
         setState(() {
           _vendors = jsonDecode(vendorsResponse.body)['vendors'] ?? [];
-          _pendingApplications = applicationsSnapshot.docs.map((doc) => {
-            'id': doc.id,
-            ...doc.data(),
-          }).toList();
+          _pendingApplications = applicationsSnapshot.docs
+              .map((doc) => {
+                    'id': doc.id,
+                    ...doc.data(),
+                  })
+              .toList();
           _isLoading = false;
         });
+      } else {
+         setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Error loading vendors: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   List<dynamic> _getFilteredVendors() {
     var filtered = _vendors;
 
-    // Apply search
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((vendor) {
         final name = vendor['name']?.toString().toLowerCase() ?? '';
         final email = vendor['email']?.toString().toLowerCase() ?? '';
         final storeName = vendor['storeName']?.toString().toLowerCase() ?? '';
         final query = _searchQuery.toLowerCase();
-        return name.contains(query) || email.contains(query) || storeName.contains(query);
+        return name.contains(query) ||
+            email.contains(query) ||
+            storeName.contains(query);
       }).toList();
     }
 
-    // Apply filter
     if (_selectedFilter != 'all') {
       filtered = filtered.where((vendor) {
         switch (_selectedFilter) {
@@ -924,7 +952,8 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
           case 'new':
             try {
               final createdAt = DateTime.parse(vendor['createdAt']);
-              final daysSinceCreation = DateTime.now().difference(createdAt).inDays;
+              final daysSinceCreation =
+                  DateTime.now().difference(createdAt).inDays;
               return daysSinceCreation <= 7;
             } catch (e) {
               return false;
@@ -934,20 +963,16 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
         }
       }).toList();
     }
-
     return filtered;
   }
 
-  // API: Approve vendor application
   Future<void> _approveApplication(Map<String, dynamic> application) async {
     try {
-      // Update Firestore application status
       await FirebaseFirestore.instance
           .collection('vendor_applications')
           .doc(application['id'])
           .update({'status': 'approved'});
 
-      // Update user role in Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(application['id'])
@@ -957,7 +982,6 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
         'approvedBy': widget.adminId,
       });
 
-      // API: Create vendor in backend
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/admin/vendors/approve'),
         headers: ApiConfig.authHeaders(widget.apiToken),
@@ -967,26 +991,26 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
         }),
       );
 
+      if (!mounted) return;
       if (response.statusCode == 200) {
-        if (!mounted) return;
-        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('อนุมัติเจ้าของร้านสำเร็จ'),
             backgroundColor: Colors.green,
           ),
         );
-        
         _loadVendors();
+      } else {
+        throw Exception('Failed to approve on backend');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการอนุมัติ: $e')),
       );
     }
   }
 
-  // API: Reject vendor application
   Future<void> _rejectApplication(String applicationId) async {
     try {
       await FirebaseFirestore.instance
@@ -999,18 +1023,17 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
       });
 
       if (!mounted) return;
-      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('ปฏิเสธคำขอสมัครแล้ว'),
           backgroundColor: Colors.red,
         ),
       );
-      
       _loadVendors();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการปฏิเสธ: $e')),
       );
     }
   }
@@ -1022,7 +1045,7 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
     return Column(
       children: [
         // Pending Applications
-        if (_pendingApplications.isNotEmpty) ...[
+        if (_pendingApplications.isNotEmpty)
           Container(
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
@@ -1045,6 +1068,187 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ..._pendingApplications.map((application) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      title: Text(application['storeName'] ?? 'ไม่ระบุชื่อร้าน'),
+                      subtitle: Text(
+                          '${application['name']} - ${application['email']}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.check_circle,
+                                color: Colors.green),
+                            onPressed: () => _approveApplication(application),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.cancel, color: Colors.red),
+                            onPressed: () =>
+                                _rejectApplication(application['id']),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+
+        // Search and Filter
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.white,
+          child: Column(
+            children: [
+              TextField(
+                onChanged: (value) => setState(() => _searchQuery = value),
+                decoration: InputDecoration(
+                  hintText: 'ค้นหาเจ้าของร้าน...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'ทั้งหมด',
+                      isSelected: _selectedFilter == 'all',
+                      onTap: () => setState(() => _selectedFilter = 'all'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'ใช้งาน',
+                      isSelected: _selectedFilter == 'active',
+                      onTap: () => setState(() => _selectedFilter = 'active'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'ระงับ',
+                      isSelected: _selectedFilter == 'suspended',
+                      onTap: () =>
+                          setState(() => _selectedFilter = 'suspended'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'ใหม่',
+                      isSelected: _selectedFilter == 'new',
+                      onTap: () => setState(() => _selectedFilter = 'new'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Vendor List
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _loadVendors,
+                  child: filteredVendors.isEmpty
+                      ? const Center(child: Text('ไม่พบข้อมูลเจ้าของร้าน'))
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filteredVendors.length,
+                          itemBuilder: (context, index) {
+                            final vendor = filteredVendors[index];
+                            return _VendorCard(
+                              vendor: vendor,
+                              apiToken: widget.apiToken,
+                              onUpdate: _loadVendors,
+                            );
+                          },
+                        ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// Vendor Card Widget for the list
+class _VendorCard extends StatelessWidget {
+  final Map<String, dynamic> vendor;
+  final String apiToken;
+  final VoidCallback onUpdate;
+
+  const _VendorCard({
+    required this.vendor,
+    required this.apiToken,
+    required this.onUpdate,
+  });
+
+  void _showVendorDetails(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _VendorDetailScreen(
+          vendor: vendor,
+          apiToken: apiToken,
+          onUpdate: onUpdate,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: InkWell(
+        onTap: () => _showVendorDetails(context),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: const Color(0xFF4B7BF5).withOpacity(0.1),
+                child: Text(
+                  vendor['name'] != null && vendor['name'].isNotEmpty
+                      ? vendor['name'].substring(0, 1).toUpperCase()
+                      : 'V',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4B7BF5),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vendor['storeName'] ?? 'ไม่ระบุชื่อร้าน',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       vendor['name'] ?? 'ไม่ระบุชื่อ',
@@ -1062,11 +1266,14 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
                           color: Colors.grey[500],
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          vendor['email'] ?? '-',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
+                        Expanded(
+                          child: Text(
+                            vendor['email'] ?? '-',
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -1078,10 +1285,11 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: vendor['status'] == 'active' 
-                          ? Colors.green 
+                      color: vendor['status'] == 'active'
+                          ? Colors.green
                           : Colors.orange,
                       borderRadius: BorderRadius.circular(20),
                     ),
@@ -1106,19 +1314,6 @@ class _VendorManagementScreenState extends State<_VendorManagementScreen> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showVendorDetails(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => _VendorDetailScreen(
-          vendor: vendor,
-          apiToken: apiToken,
-          onUpdate: onUpdate,
         ),
       ),
     );
@@ -1149,11 +1344,12 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _vendorDetails = widget.vendor;
     _loadVendorDetails();
   }
 
-  // API: Get vendor details
   Future<void> _loadVendorDetails() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
@@ -1162,6 +1358,8 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
         headers: ApiConfig.authHeaders(widget.apiToken),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
@@ -1169,31 +1367,35 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
           _machines = data['machines'] ?? [];
           _isLoading = false;
         });
+      } else {
+         setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Error loading vendor details: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // API: Toggle vendor status
   Future<void> _toggleVendorStatus() async {
-    final currentStatus = widget.vendor['status'];
+    final currentStatus = _vendorDetails['status'];
     final newStatus = currentStatus == 'active' ? 'suspended' : 'active';
-
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
       final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/admin/vendors/${widget.vendor['id']}/status'),
+        Uri.parse(
+            '${ApiConfig.baseUrl}/admin/vendors/${widget.vendor['id']}/status'),
         headers: ApiConfig.authHeaders(widget.apiToken),
         body: jsonEncode({
           'status': newStatus,
         }),
       );
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
-        // Update Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.vendor['id'])
@@ -1203,30 +1405,29 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
         });
 
         setState(() {
-          widget.vendor['status'] = newStatus;
+          _vendorDetails['status'] = newStatus;
         });
 
-        if (!mounted) return;
-        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              newStatus == 'active' 
-                  ? 'เปิดใช้งานเจ้าของร้านแล้ว' 
-                  : 'ระงับเจ้าของร้านแล้ว'
-            ),
-            backgroundColor: newStatus == 'active' ? Colors.green : Colors.orange,
+            content: Text(newStatus == 'active'
+                ? 'เปิดใช้งานเจ้าของร้านแล้ว'
+                : 'ระงับเจ้าของร้านแล้ว'),
+            backgroundColor:
+                newStatus == 'active' ? Colors.green : Colors.orange,
           ),
         );
-
-        widget.onUpdate();
+        widget.onUpdate(); // Call the callback to refresh the previous screen
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -1243,6 +1444,7 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
 
     final totalRevenue = _vendorDetails['totalRevenue'] ?? 0;
     final transactionCount = _vendorDetails['transactionCount'] ?? 0;
+    final name = _vendorDetails['name'] ?? 'V';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAFC),
@@ -1250,7 +1452,7 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         title: Text(
-          widget.vendor['storeName'] ?? 'รายละเอียดร้าน',
+          _vendorDetails['storeName'] ?? 'รายละเอียดร้าน',
           style: const TextStyle(color: Color(0xFF2D3748)),
         ),
         iconTheme: const IconThemeData(color: Color(0xFF2D3748)),
@@ -1258,235 +1460,240 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () {
-              // Edit vendor
+              // TODO: Implement edit vendor logic
             },
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Vendor Info Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: const Color(0xFF4B7BF5).withOpacity(0.1),
-                    child: Text(
-                      widget.vendor['name']?.substring(0, 1).toUpperCase() ?? 'V',
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF4B7BF5),
+      body: RefreshIndicator(
+        onRefresh: _loadVendorDetails,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor:
+                          const Color(0xFF4B7BF5).withOpacity(0.1),
+                      child: Text(
+                        name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'V',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF4B7BF5),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.vendor['name'] ?? 'ไม่ระบุชื่อ',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: widget.vendor['status'] == 'active' 
-                          ? Colors.green 
-                          : Colors.orange,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      widget.vendor['status'] == 'active' ? 'ใช้งาน' : 'ระงับ',
+                    const SizedBox(height: 16),
+                    Text(
+                      _vendorDetails['name'] ?? 'ไม่ระบุชื่อ',
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _InfoRow(
-                    icon: Icons.email,
-                    label: 'อีเมล',
-                    value: widget.vendor['email'] ?? '-',
-                  ),
-                  _InfoRow(
-                    icon: Icons.phone,
-                    label: 'โทรศัพท์',
-                    value: widget.vendor['phone'] ?? '-',
-                  ),
-                  _InfoRow(
-                    icon: Icons.store,
-                    label: 'ชื่อร้าน',
-                    value: widget.vendor['storeName'] ?? '-',
-                  ),
-                  _InfoRow(
-                    icon: Icons.location_on,
-                    label: 'ที่อยู่',
-                    value: widget.vendor['address'] ?? '-',
-                  ),
-                  _InfoRow(
-                    icon: Icons.calendar_today,
-                    label: 'วันที่สมัคร',
-                    value: _formatDate(widget.vendor['createdAt']),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Statistics
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    title: 'จำนวนเครื่อง',
-                    value: '${_machines.length}',
-                    icon: Icons.devices,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    title: 'รายการทั้งหมด',
-                    value: NumberFormat('#,###').format(transactionCount),
-                    icon: Icons.receipt,
-                    color: Colors.purple,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _StatCard(
-              title: 'รายได้ทั้งหมด',
-              value: '฿${NumberFormat('#,###').format(totalRevenue)}',
-              icon: Icons.attach_money,
-              color: Colors.green,
-            ),
-            const SizedBox(height: 16),
-
-            // Machine List
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'รายการเครื่อง',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_machines.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text('ไม่มีเครื่อง'),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _vendorDetails['status'] == 'active'
+                            ? Colors.green
+                            : Colors.orange,
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    )
-                  else
-                    ..._machines.map((machine) {
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getMachineStatusColor(machine['status']).withOpacity(0.1),
-                          child: Icon(
-                            machine['type'] == 'washer' 
-                                ? Icons.local_laundry_service 
-                                : Icons.dry_cleaning,
-                            color: _getMachineStatusColor(machine['status']),
-                          ),
-                        ),
-                        title: Text('เครื่องหมายเลข ${machine['machineNumber']}'),
-                        subtitle: Text(
-                          machine['type'] == 'washer' ? 'เครื่องซัก' : 'เครื่องอบ'
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _getMachineStatusColor(machine['status']),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            _getMachineStatusText(machine['status']),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Action Button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _toggleVendorStatus,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.vendor['status'] == 'active' 
-                      ? Colors.orange 
-                      : Colors.green,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
+                      child: Text(
+                        _vendorDetails['status'] == 'active'
+                            ? 'ใช้งาน'
+                            : 'ระงับ',
+                        style: const TextStyle(
                           color: Colors.white,
-                          strokeWidth: 2,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _InfoRow(
+                      icon: Icons.email,
+                      label: 'อีเมล',
+                      value: _vendorDetails['email'] ?? '-',
+                    ),
+                    _InfoRow(
+                      icon: Icons.phone,
+                      label: 'โทรศัพท์',
+                      value: _vendorDetails['phone'] ?? '-',
+                    ),
+                    _InfoRow(
+                      icon: Icons.store,
+                      label: 'ชื่อร้าน',
+                      value: _vendorDetails['storeName'] ?? '-',
+                    ),
+                    _InfoRow(
+                      icon: Icons.location_on,
+                      label: 'ที่อยู่',
+                      value: _vendorDetails['address'] ?? '-',
+                    ),
+                    _InfoRow(
+                      icon: Icons.calendar_today,
+                      label: 'วันที่สมัคร',
+                      value: _formatDate(_vendorDetails['createdAt']),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      title: 'จำนวนเครื่อง',
+                      value: '${_machines.length}',
+                      icon: Icons.devices,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatCard(
+                      title: 'รายการทั้งหมด',
+                      value: NumberFormat('#,###').format(transactionCount),
+                      icon: Icons.receipt,
+                      color: Colors.purple,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _StatCard(
+                title: 'รายได้ทั้งหมด',
+                value: '฿${NumberFormat('#,###').format(totalRevenue)}',
+                icon: Icons.attach_money,
+                color: Colors.green,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'รายการเครื่อง',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_machines.isEmpty)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Text('ไม่มีเครื่อง'),
                         ),
                       )
-                    : Text(
-                        widget.vendor['status'] == 'active' 
-                            ? 'ระงับการใช้งาน' 
-                            : 'เปิดใช้งาน',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                    else
+                      ..._machines.map((machine) {
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: _getMachineStatusColor(
+                                    machine['status'])
+                                .withOpacity(0.1),
+                            child: Icon(
+                              machine['type'] == 'washer'
+                                  ? Icons.local_laundry_service
+                                  : Icons.dry_cleaning,
+                              color: _getMachineStatusColor(machine['status']),
+                            ),
+                          ),
+                          title: Text(
+                              'เครื่องหมายเลข ${machine['machineNumber']}'),
+                          subtitle: Text(machine['type'] == 'washer'
+                              ? 'เครื่องซัก'
+                              : 'เครื่องอบ'),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _getMachineStatusColor(machine['status']),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _getMachineStatusText(machine['status']),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _toggleVendorStatus,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _vendorDetails['status'] == 'active'
+                        ? Colors.orange
+                        : Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          _vendorDetails['status'] == 'active'
+                              ? 'ระงับการใช้งาน'
+                              : 'เปิดใช้งาน',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1529,7 +1736,7 @@ class _VendorDetailScreenState extends State<_VendorDetailScreen> {
   }
 }
 
-// Financial Screen
+// Financial Screen (Tab 3)
 class _FinancialScreen extends StatefulWidget {
   final String adminId;
   final String apiToken;
@@ -1554,25 +1761,32 @@ class _FinancialScreenState extends State<_FinancialScreen> {
     _loadFinancialData();
   }
 
-  // API: Get financial data
   Future<void> _loadFinancialData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/admin/financial?period=$_selectedPeriod'),
+        Uri.parse(
+            '${ApiConfig.baseUrl}/admin/financial?period=$_selectedPeriod'),
         headers: ApiConfig.authHeaders(widget.apiToken),
       );
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         setState(() {
           _financialData = jsonDecode(response.body);
           _isLoading = false;
         });
+      } else {
+         setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Error loading financial data: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -1585,121 +1799,19 @@ class _FinancialScreenState extends State<_FinancialScreen> {
     final totalRevenue = (_financialData['totalRevenue'] ?? 0).toDouble();
     final commission = (_financialData['commission'] ?? 0).toDouble();
     final vendorShare = (_financialData['vendorShare'] ?? 0).toDouble();
-    final vendorRevenues = _financialData['vendorRevenues'] as Map<String, dynamic>? ?? {};
+    final vendorRevenues =
+        _financialData['vendorRevenues'] as Map<String, dynamic>? ?? {};
     final payments = _financialData['recentPayments'] as List? ?? [];
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Period Selector
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'เลือกช่วงเวลา',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _PeriodChip(
-                      label: 'รายวัน',
-                      isSelected: _selectedPeriod == 'day',
-                      onTap: () {
-                        setState(() => _selectedPeriod = 'day');
-                        _loadFinancialData();
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _PeriodChip(
-                      label: 'รายสัปดาห์',
-                      isSelected: _selectedPeriod == 'week',
-                      onTap: () {
-                        setState(() => _selectedPeriod = 'week');
-                        _loadFinancialData();
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _PeriodChip(
-                      label: 'รายเดือน',
-                      isSelected: _selectedPeriod == 'month',
-                      onTap: () {
-                        setState(() => _selectedPeriod = 'month');
-                        _loadFinancialData();
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _PeriodChip(
-                      label: 'รายปี',
-                      isSelected: _selectedPeriod == 'year',
-                      onTap: () {
-                        setState(() => _selectedPeriod = 'year');
-                        _loadFinancialData();
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Financial Summary
-          Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _FinancialCard(
-                      title: 'รายได้รวม',
-                      value: '฿${NumberFormat('#,###').format(totalRevenue)}',
-                      icon: Icons.account_balance_wallet,
-                      color: Colors.green,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _FinancialCard(
-                      title: 'ค่าคอมมิชชั่น (15%)',
-                      value: '฿${NumberFormat('#,###').format(commission)}',
-                      icon: Icons.account_balance,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _FinancialCard(
-                title: 'ส่วนแบ่งเจ้าของร้าน',
-                value: '฿${NumberFormat('#,###').format(vendorShare)}',
-                icon: Icons.store,
-                color: Colors.blue,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Revenue by Vendor Chart
-          if (vendorRevenues.isNotEmpty)
+    return RefreshIndicator(
+      onRefresh: _loadFinancialData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Container(
-              height: 350,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -1715,144 +1827,254 @@ class _FinancialScreenState extends State<_FinancialScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'สัดส่วนรายได้แต่ละสาขา',
+                    'เลือกช่วงเวลา',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        // Pie Chart
-                        Expanded(
-                          flex: 2,
-                          child: PieChart(
-                            PieChartData(
-                              sectionsSpace: 2,
-                              centerSpaceRadius: 40,
-                              sections: _getPieSections(vendorRevenues),
-                              pieTouchData: PieTouchData(
-                                touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                                  // Handle touch
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Legend
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: vendorRevenues.entries.take(6).map((entry) {
-                              final index = vendorRevenues.keys.toList().indexOf(entry.key);
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: _getChartColor(index),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        entry.key,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _PeriodChip(
+                        label: 'รายวัน',
+                        isSelected: _selectedPeriod == 'day',
+                        onTap: () {
+                          setState(() => _selectedPeriod = 'day');
+                          _loadFinancialData();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _PeriodChip(
+                        label: 'รายสัปดาห์',
+                        isSelected: _selectedPeriod == 'week',
+                        onTap: () {
+                          setState(() => _selectedPeriod = 'week');
+                          _loadFinancialData();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _PeriodChip(
+                        label: 'รายเดือน',
+                        isSelected: _selectedPeriod == 'month',
+                        onTap: () {
+                          setState(() => _selectedPeriod = 'month');
+                          _loadFinancialData();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _PeriodChip(
+                        label: 'รายปี',
+                        isSelected: _selectedPeriod == 'year',
+                        onTap: () {
+                          setState(() => _selectedPeriod = 'year');
+                          _loadFinancialData();
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          const SizedBox(height: 16),
-
-          // Payment History
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
+            const SizedBox(height: 16),
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FinancialCard(
+                        title: 'รายได้รวม',
+                        value:
+                            '฿${NumberFormat('#,###.00').format(totalRevenue)}',
+                        icon: Icons.account_balance_wallet,
+                        color: Colors.green,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _FinancialCard(
+                        title: 'ค่าคอมมิชชั่น', // (15%)
+                        value: '฿${NumberFormat('#,###.00').format(commission)}',
+                        icon: Icons.account_balance,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _FinancialCard(
+                  title: 'ส่วนแบ่งเจ้าของร้าน',
+                  value: '฿${NumberFormat('#,###.00').format(vendorShare)}',
+                  icon: Icons.store,
+                  color: Colors.blue,
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const SizedBox(height: 16),
+            if (vendorRevenues.isNotEmpty)
+              Container(
+                height: 350,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'ประวัติการชำระเงิน',
+                      'สัดส่วนรายได้แต่ละสาขา',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    TextButton.icon(
-                      onPressed: () {
-                        // View all payments
-                      },
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('ดูทั้งหมด'),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: PieChart(
+                              PieChartData(
+                                sectionsSpace: 2,
+                                centerSpaceRadius: 40,
+                                sections: _getPieSections(vendorRevenues),
+                                pieTouchData: PieTouchData(
+                                  touchCallback:
+                                      (FlTouchEvent event, pieTouchResponse) {
+                                    // TODO: Handle touch
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children:
+                                  vendorRevenues.entries.take(6).map((entry) {
+                                final index = vendorRevenues.keys
+                                    .toList()
+                                    .indexOf(entry.key);
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color: _getChartColor(index),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          entry.key,
+                                          style: const TextStyle(fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                if (payments.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text('ไม่มีประวัติการชำระเงิน'),
-                    ),
-                  )
-                else
-                  ...payments.take(5).map((payment) {
-                    return _PaymentItem(
-                      vendorName: payment['vendorName'] ?? 'ไม่ระบุ',
-                      amount: (payment['amount'] ?? 0).toDouble(),
-                      date: payment['createdAt'],
-                      status: payment['status'] ?? 'pending',
-                    );
-                  }).toList(),
-              ],
+              ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'ประวัติการชำระเงิน',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          // TODO: Navigate to all payments screen
+                        },
+                        icon: const Icon(Icons.arrow_forward),
+                        label: const Text('ดูทั้งหมด'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (payments.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text('ไม่มีประวัติการชำระเงิน'),
+                      ),
+                    )
+                  else
+                    ...payments.take(5).map((payment) {
+                      return _PaymentItem(
+                        vendorName: payment['vendorName'] ?? 'ไม่ระบุ',
+                        amount: (payment['amount'] ?? 0).toDouble(),
+                        date: payment['createdAt'],
+                        status: payment['status'] ?? 'pending',
+                      );
+                    }).toList(),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  List<PieChartSectionData> _getPieSections(Map<String, dynamic> vendorRevenues) {
-    final total = vendorRevenues.values.fold(0.0, (sum, value) => sum + value);
-    
+  List<PieChartSectionData> _getPieSections(
+      Map<String, dynamic> vendorRevenues) {
+    if (vendorRevenues.isEmpty) return [];
+
+    final total =
+        vendorRevenues.values.fold(0.0, (sum, value) => sum + (value ?? 0.0));
+    if (total == 0.0) return [];
+
     return vendorRevenues.entries.take(6).map((entry) {
       final index = vendorRevenues.keys.toList().indexOf(entry.key);
-      final percentage = (entry.value / total * 100);
-      
+      final value = (entry.value ?? 0.0).toDouble();
+      final percentage = (value / total * 100);
+
       return PieChartSectionData(
         color: _getChartColor(index),
-        value: entry.value.toDouble(),
+        value: value,
         title: '${percentage.toStringAsFixed(1)}%',
         radius: 80,
         titleStyle: const TextStyle(
@@ -1877,7 +2099,7 @@ class _FinancialScreenState extends State<_FinancialScreen> {
   }
 }
 
-// System Settings Screen
+// System Settings Screen (Tab 4)
 class _SystemSettingsScreen extends StatefulWidget {
   final String adminId;
   final String apiToken;
@@ -1892,10 +2114,11 @@ class _SystemSettingsScreen extends StatefulWidget {
 }
 
 class _SystemSettingsScreenState extends State<_SystemSettingsScreen> {
-  final _commissionController = TextEditingController(text: '15');
+  final _commissionController = TextEditingController(text: '15.0');
   bool _autoBackup = true;
   String _backupFrequency = 'daily';
-  bool _isLoading = false;
+  bool _isSaving = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -1903,132 +2126,112 @@ class _SystemSettingsScreenState extends State<_SystemSettingsScreen> {
     _loadSettings();
   }
 
-  // API: Load system settings
+  @override
+  void dispose() {
+    _commissionController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSettings() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     try {
       final response = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/admin/settings'),
         headers: ApiConfig.authHeaders(widget.apiToken),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          _commissionController.text = data['commissionRate']?.toString() ?? '15';
+          _commissionController.text =
+              data['commissionRate']?.toString() ?? '15.0';
           _autoBackup = data['autoBackup'] ?? true;
           _backupFrequency = data['backupFrequency'] ?? 'daily';
+          _isLoading = false;
         });
+      } else {
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Error loading settings: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // API: Save system settings
   Future<void> _saveSettings() async {
-    setState(() => _isLoading = true);
+    if (!mounted) return;
+    setState(() => _isSaving = true);
 
     try {
       final response = await http.put(
         Uri.parse('${ApiConfig.baseUrl}/admin/settings'),
         headers: ApiConfig.authHeaders(widget.apiToken),
         body: jsonEncode({
-          'commissionRate': double.parse(_commissionController.text),
+          'commissionRate': double.tryParse(_commissionController.text) ?? 15.0,
           'autoBackup': _autoBackup,
           'backupFrequency': _backupFrequency,
         }),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
-        if (!mounted) return;
-        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('บันทึกการตั้งค่าแล้ว'),
             backgroundColor: Colors.green,
           ),
         );
+      } else {
+        throw Exception('Failed to save settings');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
-  // API: Export all data
   Future<void> _exportData() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/admin/export'),
-        headers: ApiConfig.authHeaders(widget.apiToken),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final downloadUrl = data['downloadUrl'];
-        
-        if (!mounted) return;
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ส่งออกข้อมูลสำเร็จ'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // In a real app, open the download URL
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
+    // Implement data export logic
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กำลังดำเนินการส่งออกข้อมูล...')));
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Commission Settings
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadSettings,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Commission Settings
+            _buildSettingsCard(
+              title: 'ตั้งค่าค่าคอมมิชชั่น',
               children: [
-                const Text(
-                  'ตั้งค่าค่าคอมมิชชั่น',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 Row(
                   children: [
                     Expanded(
                       child: TextFormField(
                         controller: _commissionController,
-                        keyboardType: TextInputType.number,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           labelText: 'อัตราค่าคอมมิชชั่น (%)',
                           border: OutlineInputBorder(
@@ -2039,21 +2242,24 @@ class _SystemSettingsScreenState extends State<_SystemSettingsScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: _saveSettings,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4B7BF5),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _saveSettings,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4B7BF5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'บันทึก',
-                        style: TextStyle(color: Colors.white),
+                        child: _isSaving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
+                            : const Text('บันทึก',
+                                style: TextStyle(color: Colors.white)),
                       ),
                     ),
                   ],
@@ -2068,38 +2274,19 @@ class _SystemSettingsScreenState extends State<_SystemSettingsScreen> {
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // Backup Settings
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            // Backup Settings
+            _buildSettingsCard(
+              title: 'การสำรองข้อมูลอัตโนมัติ',
               children: [
-                const Text(
-                  'การสำรองข้อมูลอัตโนมัติ',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 SwitchListTile(
                   title: const Text('เปิดใช้งานการสำรองข้อมูลอัตโนมัติ'),
                   subtitle: const Text('ระบบจะสำรองข้อมูลตามความถี่ที่กำหนด'),
                   value: _autoBackup,
-                  onChanged: (value) => setState(() => _autoBackup = value),
+                  onChanged: (value) {
+                    setState(() => _autoBackup = value);
+                    _saveSettings();
+                  },
                   activeColor: const Color(0xFF4B7BF5),
                 ),
                 if (_autoBackup) ...[
@@ -2110,165 +2297,122 @@ class _SystemSettingsScreenState extends State<_SystemSettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _FrequencyOption(
                         label: 'รายวัน',
                         value: 'daily',
                         groupValue: _backupFrequency,
-                        onChanged: (value) => setState(() => _backupFrequency = value!),
+                        onChanged: (value) {
+                          setState(() => _backupFrequency = value!);
+                          _saveSettings();
+                        },
                       ),
-                      const SizedBox(width: 16),
                       _FrequencyOption(
                         label: 'รายสัปดาห์',
                         value: 'weekly',
                         groupValue: _backupFrequency,
-                        onChanged: (value) => setState(() => _backupFrequency = value!),
+                        onChanged: (value) {
+                          setState(() => _backupFrequency = value!);
+                          _saveSettings();
+                        },
                       ),
-                      const SizedBox(width: 16),
                       _FrequencyOption(
                         label: 'รายเดือน',
                         value: 'monthly',
                         groupValue: _backupFrequency,
-                        onChanged: (value) => setState(() => _backupFrequency = value!),
+                        onChanged: (value) {
+                          setState(() => _backupFrequency = value!);
+                          _saveSettings();
+                        },
                       ),
                     ],
                   ),
                 ],
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // Data Management
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            // Data Management
+            _buildSettingsCard(
+              title: 'จัดการข้อมูล',
               children: [
-                const Text(
-                  'จัดการข้อมูล',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.cloud_upload, color: Color(0xFF4B7BF5)),
+                  leading: const Icon(Icons.cloud_upload,
+                      color: Color(0xFF4B7BF5)),
                   title: const Text('สำรองข้อมูลทันที'),
-                  subtitle: const Text('สร้างไฟล์สำรองข้อมูลทั้งหมด'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // API: Manual backup
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('กำลังสำรองข้อมูล...')),
-                    );
+                    // TODO: API Call for Manual backup
                   },
                 ),
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.file_download, color: Colors.green),
                   title: const Text('ส่งออกข้อมูล'),
-                  subtitle: const Text('ดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _exportData,
                 ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.restore, color: Colors.orange),
-                  title: const Text('นำเข้าข้อมูล'),
-                  subtitle: const Text('กู้คืนข้อมูลจากไฟล์สำรอง'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // API: Import data
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('กำลังนำเข้าข้อมูล...')),
-                    );
-                  },
-                ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // Security Settings
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            // Security Settings
+            _buildSettingsCard(
+              title: 'ความปลอดภัย',
               children: [
-                const Text(
-                  'ความปลอดภัย',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 ListTile(
                   leading: const Icon(Icons.lock, color: Colors.red),
                   title: const Text('เปลี่ยนรหัสผ่าน'),
-                  subtitle: const Text('แก้ไขรหัสผ่านสำหรับบัญชีผู้ดูแลระบบ'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // Change password dialog
+                    // TODO: Show change password dialog
                   },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.security, color: Colors.purple),
-                  title: const Text('การยืนยันตัวตนสองขั้นตอน'),
-                  subtitle: const Text('เพิ่มความปลอดภัยด้วย 2FA'),
-                  trailing: Switch(
-                    value: false,
-                    onChanged: (value) {
-                      // Toggle 2FA
-                    },
-                    activeColor: const Color(0xFF4B7BF5),
-                  ),
                 ),
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.history, color: Colors.blue),
                   title: const Text('ประวัติการเข้าใช้งาน'),
-                  subtitle: const Text('ดูประวัติการเข้าสู่ระบบทั้งหมด'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // View login history
+                     // TODO: Navigate to login history screen
                   },
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _commissionController.dispose();
-    super.dispose();
+  Widget _buildSettingsCard(
+      {required String title, required List<Widget> children}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
   }
 }
 
@@ -2322,17 +2466,20 @@ class _DashboardCard extends StatelessWidget {
               ),
               if (trend != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: (trendUp ?? false) 
-                        ? Colors.green.withOpacity(0.1) 
+                    color: (trendUp ?? false)
+                        ? Colors.green.withOpacity(0.1)
                         : Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        (trendUp ?? false) ? Icons.trending_up : Icons.trending_down,
+                        (trendUp ?? false)
+                            ? Icons.trending_up
+                            : Icons.trending_down,
                         color: (trendUp ?? false) ? Colors.green : Colors.red,
                         size: 16,
                       ),
@@ -2340,7 +2487,8 @@ class _DashboardCard extends StatelessWidget {
                       Text(
                         trend!,
                         style: TextStyle(
-                          color: (trendUp ?? false) ? Colors.green : Colors.red,
+                          color:
+                              (trendUp ?? false) ? Colors.green : Colors.red,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -2733,7 +2881,7 @@ class _PaymentItem extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '฿${NumberFormat('#,###').format(amount)}',
+                  '฿${NumberFormat('#,###.00').format(amount)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -2746,7 +2894,8 @@ class _PaymentItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: _getStatusColor(),
                   borderRadius: BorderRadius.circular(12),
@@ -2826,177 +2975,21 @@ class _FrequencyOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Radio<String>(
-          value: value,
-          groupValue: groupValue,
-          onChanged: onChanged,
-          activeColor: const Color(0xFF4B7BF5),
-        ),
-        Text(label),
-      ],
-    );
-  }
-},
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ..._pendingApplications.map((application) {
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      title: Text(application['storeName'] ?? 'ไม่ระบุชื่อร้าน'),
-                      subtitle: Text('${application['name']} - ${application['email']}'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.check_circle, color: Colors.green),
-                            onPressed: () => _approveApplication(application),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.cancel, color: Colors.red),
-                            onPressed: () => _rejectApplication(application['id']),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ],
+    return Expanded(
+      child: InkWell(
+        onTap: () => onChanged(value),
+        child: Row(
+          children: [
+            Radio<String>(
+              value: value,
+              groupValue: groupValue,
+              onChanged: onChanged,
+              activeColor: const Color(0xFF4B7BF5),
             ),
-          ),
-        ],
-
-        // Search and Filter
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.white,
-          child: Column(
-            children: [
-              // Search Bar
-              TextField(
-                onChanged: (value) => setState(() => _searchQuery = value),
-                decoration: InputDecoration(
-                  hintText: 'ค้นหาเจ้าของร้าน...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Filter Chips
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'ทั้งหมด',
-                      isSelected: _selectedFilter == 'all',
-                      onTap: () => setState(() => _selectedFilter = 'all'),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'ใช้งาน',
-                      isSelected: _selectedFilter == 'active',
-                      onTap: () => setState(() => _selectedFilter = 'active'),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'ระงับ',
-                      isSelected: _selectedFilter == 'suspended',
-                      onTap: () => setState(() => _selectedFilter = 'suspended'),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'ใหม่',
-                      isSelected: _selectedFilter == 'new',
-                      onTap: () => setState(() => _selectedFilter = 'new'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            Expanded(child: Text(label)),
+          ],
         ),
-
-        // Vendor List
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : filteredVendors.isEmpty
-                  ? const Center(child: Text('ไม่พบข้อมูลเจ้าของร้าน'))
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: filteredVendors.length,
-                      itemBuilder: (context, index) {
-                        final vendor = filteredVendors[index];
-                        return _VendorCard(
-                          vendor: vendor,
-                          apiToken: widget.apiToken,
-                          onUpdate: _loadVendors,
-                        );
-                      },
-                    ),
-        ),
-      ],
+      ),
     );
   }
 }
-
-// Vendor Card Widget
-class _VendorCard extends StatelessWidget {
-  final Map<String, dynamic> vendor;
-  final String apiToken;
-  final VoidCallback onUpdate;
-
-  const _VendorCard({
-    required this.vendor,
-    required this.apiToken,
-    required this.onUpdate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () => _showVendorDetails(context),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: const Color(0xFF4B7BF5).withOpacity(0.1),
-                child: Text(
-                  vendor['name']?.substring(0, 1).toUpperCase() ?? 'V',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF4B7BF5),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      vendor['storeName'] ?? 'ไม่ระบุชื่อร้าน',
-                      style: const TextStyle(
-                        fontSize: 16
