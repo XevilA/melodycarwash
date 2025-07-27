@@ -1,4 +1,4 @@
-# 📚 Laundry Management System - REST API Documentation
+# 📚 Laundry And Carwashing Management System - REST API Documentation
 
 ## 🔧 System Architecture
 
